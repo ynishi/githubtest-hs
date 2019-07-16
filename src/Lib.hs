@@ -3,59 +3,87 @@
 
 module Lib where
 
-import           Prelude.Compat                   hiding (head, map)
+import           Prelude.Compat                 hiding (filter, head, map)
 
-import           Control.Monad                    (mapM, sequence)
-import           Data.Either                      (fromRight)
-import           Data.Monoid                      ((<>))
-import           Data.Proxy                       (Proxy (..))
-import           Data.Text                        (Text, intercalate, pack)
-import           Data.Text.IO                     as T (putStrLn)
-import           Data.Vector                      as V (Vector, empty, fromList,
-                                                        head, map, toList)
+import           Control.Monad                  (filterM, mapM, sequence)
+import           Data.Either                    (fromRight)
+import           Data.Monoid                    ((<>))
+import           Data.Proxy                     (Proxy (..))
+import           Data.Text                      (Text, intercalate, pack)
+import           Data.Text.IO                   as T (putStrLn)
+import           Data.Vector                    as V (Vector, empty, filter,
+                                                      fromList, head, map,
+                                                      toList)
 
-import qualified GitHub.Data.Definitions          as DD
-import qualified GitHub.Data.Name                 as DN
-import qualified GitHub.Endpoints.Organizations   as EO
-import qualified GitHub.Endpoints.PullRequests    as EP
-import qualified GitHub.Endpoints.Repos           as ER
-import qualified GitHub.Endpoints.Users.Followers as GitHub
+import qualified GitHub                         as GH
+import qualified GitHub.Endpoints.Issues.Labels as GHIL
+import qualified GitHub.Endpoints.Organizations as GHEO
+import qualified GitHub.Endpoints.Repos         as GHER
 
-newtype Context = Context
-  { users :: [Text]
+data Context = Context
+  { users         :: [Text]
+  , excludeLabels :: [Text]
   }
 
-c = Context {users = ["mike-burns"]}
+c = Context {users = ["mike-burns"], excludeLabels = ["WIP"]}
 
 getPRList :: Context -> IO (V.Vector (V.Vector (V.Vector ())))
 getPRList =
   mapM
     ((\x -> do
-        possibleOrgs <- EO.publicOrganizationsFor x
+        possibleOrgs <- GHEO.publicOrganizationsFor x
         let orgs = fromRight empty possibleOrgs
-        T.putStrLn $
-          foldMap
-            ((<> "\n") . (GitHub.untagName . EO.simpleOrganizationLogin))
-            orgs
         mapM
           (\org -> do
-             let orgName = EO.simpleOrganizationLogin org
-             possibleRepos <- ER.organizationRepos orgName
-             let repos = fromRight empty possibleRepos
-             let repoNames = map ER.repoName repos
+             let orgName = GH.simpleOrganizationLogin org
+             T.putStrLn . pack . show $ orgName
+             possibleRepos <- GHER.organizationRepos orgName
+             let repoNames = map GH.repoName . fromRight empty $ possibleRepos
              mapM
                (\repoName -> do
-                  let orgNameText = GitHub.untagName orgName
                   let ownerName =
-                        DN.mkName (Proxy :: Proxy DD.Owner) orgNameText
-                  possiblePRs <- EP.pullRequestsFor ownerName repoName
-                  case possiblePRs of
-                    (Left error) -> T.putStrLn . pack $ "Error: " ++ show error
-                    (Right pullRequests) ->
-                      T.putStrLn . pack . show $ pullRequests)
+                        GH.mkName (Proxy :: Proxy GH.Owner) . GH.untagName $
+                        orgName
+                  possiblePRs <-
+                    GH.executeRequest' $
+                    GH.pullRequestsForR
+                      ownerName
+                      repoName
+                      GH.stateOpen
+                      GH.FetchAll
+                  let prs = fromRight empty possiblePRs
+                  filterd <-
+                    filterM (condLabelPullRequest (excludeLabels c) repoName) .
+                    toList . filter (condOwnerPullRequest ownerName) $
+                    prs
+                  T.putStrLn .
+                    pack . show . map formatSimplePullRequest . V.fromList $
+                    filterd)
                repoNames)
           orgs) .
-     DN.mkName (Proxy :: Proxy GitHub.User)) .
+     GH.mkName (Proxy :: Proxy GH.User)) .
   V.fromList . users
 
-formatPullRequest = EP.pullRequestTitle
+condOwnerPullRequest owner pr =
+  owner ==
+  (GH.mkName (Proxy :: Proxy GH.Owner) .
+   GH.untagName . GH.simpleUserLogin . GH.simplePullRequestUser $
+   pr)
+
+condLabelPullRequest excludeLabels repoName pr = do
+  possible <- GHIL.labelsOnIssue ownerName repoName issueId
+  return .
+    not .
+    any ((`elem` excludeLabels) . GH.untagName . GH.labelName) . fromRight empty $
+    possible
+  where
+    ownerName =
+      GH.mkName (Proxy :: Proxy GH.Owner) .
+      GH.untagName . GH.simpleUserLogin . GH.simplePullRequestUser $
+      pr
+    issueId =
+      GH.mkId (Proxy :: Proxy GH.Issue) .
+      GH.unIssueNumber . GH.simplePullRequestNumber $
+      pr
+
+formatSimplePullRequest = GH.simplePullRequestTitle
