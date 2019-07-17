@@ -23,9 +23,12 @@ import qualified GitHub.Endpoints.Repos         as GHER
 data Context = Context
   { users         :: [Text]
   , excludeLabels :: [Text]
+  , endpoint      :: Text
   }
 
-c = Context {users = ["mike-burns"], excludeLabels = ["WIP"]}
+c =
+  Context
+    {users = ["mike-burns"], excludeLabels = ["WIP"], endpoint = "github.com"}
 
 getPRList :: Context -> IO (V.Vector (V.Vector (V.Vector ())))
 getPRList =
@@ -45,7 +48,7 @@ getPRList =
                         GH.mkName (Proxy :: Proxy GH.Owner) . GH.untagName $
                         orgName
                   possiblePRs <-
-                    GH.executeRequest' $
+                    executeReq $
                     GH.pullRequestsForR
                       ownerName
                       repoName
@@ -63,6 +66,12 @@ getPRList =
           orgs) .
      GH.mkName (Proxy :: Proxy GH.User)) .
   V.fromList . users
+  where
+    auth = GH.EnterpriseOAuth (endpoint c) ""
+    executeReq =
+      case GH.endpoint auth of
+        Nothing -> GH.executeRequest'
+        _       -> GH.executeRequest auth
 
 condOwnerPullRequest owner pr =
   owner ==
