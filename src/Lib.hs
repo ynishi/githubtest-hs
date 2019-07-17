@@ -24,11 +24,14 @@ data Context = Context
   { users         :: [Text]
   , excludeLabels :: [Text]
   , endpoint      :: Text
-  }
+  } deriving (Eq, Ord, Show)
 
 c =
   Context
-    {users = ["mike-burns"], excludeLabels = ["WIP"], endpoint = "github.com"}
+    { users = ["mike-burns"]
+    , excludeLabels = ["WIP"]
+    , endpoint = "https://api.github.com"
+    }
 
 getPRList :: Context -> IO (V.Vector (V.Vector (V.Vector ())))
 getPRList =
