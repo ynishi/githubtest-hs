@@ -1,12 +1,18 @@
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Lib where
 
+import           Data.Yaml
+import           GHC.Generics
+
 import           Prelude.Compat                 hiding (filter, head, map)
 
 import           Control.Monad                  (filterM, mapM, sequence)
 import           Data.Either                    (fromRight)
+import           Data.Maybe                     (maybe)
 import           Data.Monoid                    ((<>))
 import           Data.Proxy                     (Proxy (..))
 import           Data.Text                      (Text, intercalate, pack)
@@ -24,7 +30,9 @@ data Context = Context
   { users         :: [Text]
   , excludeLabels :: [Text]
   , endpoint      :: Text
-  } deriving (Eq, Ord, Show)
+  } deriving (Eq, Show, Generic)
+
+instance FromJSON Context
 
 c =
   Context
@@ -37,13 +45,14 @@ getPRList :: Context -> IO (V.Vector (V.Vector (V.Vector ())))
 getPRList =
   mapM
     ((\x -> do
-        possibleOrgs <- GHEO.publicOrganizationsFor x
+        T.putStrLn . pack . show $ ep
+        possibleOrgs <- publicOrg x
         let orgs = fromRight empty possibleOrgs
         mapM
           (\org -> do
              let orgName = GH.simpleOrganizationLogin org
              T.putStrLn . pack . show $ orgName
-             possibleRepos <- GHER.organizationRepos orgName
+             possibleRepos <- orgRepos orgName
              let repoNames = map GH.repoName . fromRight empty $ possibleRepos
              mapM
                (\repoName -> do
@@ -71,10 +80,19 @@ getPRList =
   V.fromList . users
   where
     auth = GH.EnterpriseOAuth (endpoint c) ""
-    executeReq =
-      case GH.endpoint auth of
-        Nothing -> GH.executeRequest'
-        _       -> GH.executeRequest auth
+    ep = GH.endpoint auth
+    executeReq = maybe GH.executeRequest' (\_ -> GH.executeRequest auth) ep
+    publicOrg =
+      maybe
+        GHEO.publicOrganizationsFor
+        (\_ -> GHEO.publicOrganizationsFor' . Just $ auth)
+        ep
+    orgRepos =
+      maybe
+        GHER.organizationRepos
+        (const
+           (\x -> GHER.organizationRepos' (Just auth) x GHER.RepoPublicityAll))
+        ep
 
 condOwnerPullRequest owner pr =
   owner ==

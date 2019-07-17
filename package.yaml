@@ -25,6 +25,9 @@ dependencies:
 - base-compat
 - text
 - vector
+- yaml
+- template-haskell
+- th-lift-instances
 
 library:
   source-dirs: src

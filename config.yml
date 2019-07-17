@@ -1,0 +1,6 @@
+users:
+- mike-burnsa
+excludeLabels:
+- WIP
+endpoint: https://api.github.com
+
