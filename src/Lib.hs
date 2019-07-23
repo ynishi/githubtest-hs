@@ -56,9 +56,7 @@ getPRList =
              let repoNames = map GH.repoName . fromRight empty $ possibleRepos
              mapM
                (\repoName -> do
-                  let ownerName =
-                        GH.mkName (Proxy :: Proxy GH.Owner) . GH.untagName $
-                        orgName
+                  let ownerName = orgToOwnerName orgName
                   possiblePRs <-
                     executeReq $
                     GH.pullRequestsForR
@@ -94,6 +92,8 @@ getPRList =
            (\x -> GHER.organizationRepos' (Just auth) x GHER.RepoPublicityAll))
         ep
 
+orgToOwnerName = GH.mkName (Proxy :: Proxy GH.Owner) . GH.untagName
+
 condOwnerPullRequest owner pr =
   owner ==
   (GH.mkName (Proxy :: Proxy GH.Owner) .
@@ -116,4 +116,8 @@ condLabelPullRequest excludeLabels repoName pr = do
       GH.unIssueNumber . GH.simplePullRequestNumber $
       pr
 
-formatSimplePullRequest = GH.simplePullRequestTitle
+formatSimplePullRequest pr =
+  "Title: " <> GH.simplePullRequestTitle pr <> "\nURL: " <>
+  (GH.getUrl . GH.simplePullRequestHtmlUrl $ pr) <>
+  "\nUser: " <>
+  (GH.untagName . GH.simpleUserLogin . GH.simplePullRequestUser $ pr)
