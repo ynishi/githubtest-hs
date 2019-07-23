@@ -28,6 +28,8 @@ dependencies:
 - yaml
 - template-haskell
 - th-lift-instances
+- slack-web
+- mtl
 
 library:
   source-dirs: src
