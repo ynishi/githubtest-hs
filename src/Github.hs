@@ -3,7 +3,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Lib where
+module Github where
 
 import           Data.Yaml
 import           GHC.Generics
@@ -33,7 +33,7 @@ data Context = Context
   } deriving (Eq, Show, Generic)
 
 instance FromJSON Context
-
+    
 c =
   Context
     { users = ["mike-burns"]
