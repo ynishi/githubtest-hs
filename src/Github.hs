@@ -33,7 +33,7 @@ data Context = Context
   } deriving (Eq, Show, Generic)
 
 instance FromJSON Context
-    
+
 c =
   Context
     { users = ["mike-burns"]
@@ -41,7 +41,7 @@ c =
     , endpoint = "https://api.github.com"
     }
 
-getPRList :: Context -> IO (V.Vector (V.Vector (V.Vector ())))
+getPRList :: Context -> IO (V.Vector (V.Vector (V.Vector Text)))
 getPRList =
   mapM
     ((\x -> do
@@ -69,9 +69,11 @@ getPRList =
                     filterM (condLabelPullRequest (excludeLabels c) repoName) .
                     toList . filter (condOwnerPullRequest ownerName) $
                     prs
-                  T.putStrLn .
-                    pack . show . map formatSimplePullRequest . V.fromList $
-                    filterd)
+                  let ret =
+                        pack . show . map formatSimplePullRequest . V.fromList $
+                        filterd
+                  T.putStrLn ret
+                  return ret)
                repoNames)
           orgs) .
      GH.mkName (Proxy :: Proxy GH.User)) .
